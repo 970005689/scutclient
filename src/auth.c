@@ -6,7 +6,7 @@ struct in_addr local_ipaddr;
 uint8_t MAC[6];
 
 #define DRCOM_UDP_HEARTBEAT_DELAY  15 // Drcom客户端心跳延时秒数，默认12秒
-#define DRCOM_UDP_HEARTBEAT_TIMEOUT 5 // Drcom客户端心跳超时秒数
+#define DRCOM_UDP_HEARTBEAT_TIMEOUT 2 // Drcom客户端心跳超时秒数
 #define DRCOM_UDP_RECV_DELAY  2 // Drcom客户端收UDP报文延时秒数，默认2秒
 #define AUTH_8021X_LOGOFF_DELAY 500000 // 客户端退出登录收包等待时间 0.5秒（50万微秒)
 #define AUTH_8021X_RECV_DELAY  1 // 客户端收8021x报文延时秒数，默认1秒
