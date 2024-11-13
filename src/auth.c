@@ -5,8 +5,8 @@
 struct in_addr local_ipaddr;
 uint8_t MAC[6];
 
-#define DRCOM_UDP_HEARTBEAT_DELAY  12 // Drcom客户端心跳延时秒数，默认12秒
-#define DRCOM_UDP_HEARTBEAT_TIMEOUT 2 // Drcom客户端心跳超时秒数
+#define DRCOM_UDP_HEARTBEAT_DELAY  15 // Drcom客户端心跳延时秒数，默认12秒
+#define DRCOM_UDP_HEARTBEAT_TIMEOUT 5 // Drcom客户端心跳超时秒数
 #define DRCOM_UDP_RECV_DELAY  2 // Drcom客户端收UDP报文延时秒数，默认2秒
 #define AUTH_8021X_LOGOFF_DELAY 500000 // 客户端退出登录收包等待时间 0.5秒（50万微秒)
 #define AUTH_8021X_RECV_DELAY  1 // 客户端收8021x报文延时秒数，默认1秒
@@ -40,7 +40,7 @@ static int auth_8021x_sock = 0; // 8021x的socket描述符
 static int auth_udp_sock = 0; // udp的socket描述符
 static uint8_t lastHBDone = 1;	// 记录上次心跳是否成功结束，没有的话重拨
 struct sockaddr_ll auth_8021x_addr;
-
+static uint8_t udp_fail_counter=0;//udp fail conter
 /* 静态变量*/
 
 typedef enum {
@@ -412,7 +412,6 @@ int Authentication(int client) {
 	struct timeval tmp_timeout = timeout;
 	int ret = 0;
 	fd_set fdR;
-
 	uint8_t recv_8021x_buf[ETH_FRAME_LEN] = { 0 };
 	if (auth_8021x_Init() != 0) {
 		LogWrite(DOT1X, ERROR, "Unable to initialize 802.1x socket.");
@@ -483,9 +482,20 @@ int Authentication(int client) {
 		if (success_8021x && isNeedHeartBeat) {
 			if ((lastHBDone == 0) && (time(NULL) - BaseHeartbeatTime > DRCOM_UDP_HEARTBEAT_TIMEOUT)) {
 				// 认为已经掉线
+				if(udp_fail_counter>=5){
 				LogWrite(DRCOM, ERROR,	"Client: No response to last heartbeat.");
 				ret = 1; //重拨
+				udp_fail_counter=0;
 				break;
+				}
+				else
+				{
+					udp_fail_counter++;
+					lastHBDone=1;
+					BaseHeartbeatTime=time(NULL);
+					LogWrite(DRCOM, ERROR,  "Client: No response to last heartbeat.But ignored.");
+				}
+			
 			}
 			if (time(NULL) - BaseHeartbeatTime > DRCOM_UDP_HEARTBEAT_DELAY) {
 				send_udp_data_len = Drcom_ALIVE_HEARTBEAT_TYPE_Setter( send_udp_data, recv_udp_data);
@@ -505,6 +515,7 @@ int Authentication(int client) {
 	success_8021x = 0;
 	resev = 0;
 	lastHBDone = 1;
+	udp_fail_counter=0;
 ERR2:
 	close(auth_udp_sock);
 	auth_8021x_Logoff();
@@ -528,6 +539,7 @@ int Drcom_UDP_Handler(uint8_t *recv_data) {
 			isNeedHeartBeat = 0;
 			BaseHeartbeatTime = time(NULL);
 			lastHBDone = 1;
+			udp_fail_counter=0;
 			data_len = Drcom_MISC_INFO_Setter(send_udp_data, recv_data);
 			LogWrite(DRCOM, INF,"Server: MISC_RESPONSE_FOR_ALIVE. Send MISC_INFO.");
 			break;
@@ -553,6 +565,7 @@ int Drcom_UDP_Handler(uint8_t *recv_data) {
 				// 收到这个包代表完成一次心跳流程，这里要初始化时间基线，开始计时下次心跳
 				BaseHeartbeatTime = time(NULL);
 				lastHBDone = 1;
+				udp_fail_counter=0;
 				LogWrite(DRCOM, INF, "Server: MISC_HEART_BEAT_04. Waiting next heart beat cycle.");
 				break;
 			default:
